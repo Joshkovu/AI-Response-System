@@ -1,0 +1,6 @@
+.env
+.venv
+./unused/*
+.claude
+__pycache__
+unused
