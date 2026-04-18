@@ -62,8 +62,8 @@ CUDA-capable GPU | Recommended for faster embedding generation; CPU works but is
 ### 1 - Clone the repository
 
 ```bash
-git clone https://github.com/Mohamad-Hachem/RAG_AI_SYSTEM.git
-cd RAG_AI_SYSTEM
+git clone https://github.com/Joshkovu/AI-Response-System.git
+cd AI-Response-System
 ```
 
 ### 2 - Create and activate a virtual environment
