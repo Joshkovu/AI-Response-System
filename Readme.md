@@ -8,7 +8,7 @@ Upload any PDF, ask questions in plain English, and get grounded answers from yo
 
 Most document Q&A tools send your files to a third-party service for both retrieval and generation. This project keeps the document pipeline local and uses Gemini only for the final answer generation step:
 
-- Embedding - a compact local sentence-transformer converts your document into 384-dimensional semantic vectors stored in a pure-Python in-memory index.
+- Embedding - Gemini embedding API converts your document into semantic vectors stored in a pure-Python in-memory index.
 - Retrieval - cosine distance search finds the paragraphs most relevant to your question.
 - Generation - Gemini reads only those paragraphs and streams an answer token-by-token directly to your browser.
 
@@ -32,7 +32,7 @@ Mermaid source
 
 PDF -> Paragraphs - `PdfReader` reads every page, normalises whitespace, and splits on paragraph breaks.
 
-Paragraphs -> Vectors - `LocalEmbedding.build_index()` batch-embeds all paragraphs in one GPU pass and stores them in `VectorIndex`.
+Paragraphs -> Vectors - `LocalEmbedding.build_index()` embeds all paragraphs via Gemini and stores them in `VectorIndex`.
 
 Question -> Context - at query time, the question is embedded and compared against every stored vector by cosine distance; the top-k chunks are returned as a single context string.
 
@@ -57,7 +57,7 @@ Requirement | Version
 ---|---
 Python | 3.10+
 Gemini API access | Google AI Studio API key or Vertex AI access
-CUDA-capable GPU | Recommended for faster embedding generation; CPU works but is slower
+CUDA-capable GPU | Not required for embeddings when using Gemini API
 
 ### 1 - Clone the repository
 
@@ -84,13 +84,8 @@ source .venv/bin/activate
 ### 3 - Install dependencies
 
 ```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 pip install transformers streamlit pypdf python-dotenv google-genai
 ```
-
-GPU note: the cu121 wheel targets CUDA 12.1. Find the right wheel for your CUDA version at pytorch.org/get-started.
-
-CPU-only? Replace the first command with `pip install torch torchvision torchaudio`.
 
 ### 4 - Add your Gemini API key
 
@@ -110,7 +105,7 @@ streamlit run main.py
 
 Streamlit will print a local URL, usually `http://localhost:8501`. Open it in your browser.
 
-First run: the embedding model is downloaded once and cached locally. The Gemini client then uses your API key for generation.
+First run: Gemini embedding and generation clients use your API key directly.
 
 ## Usage
 
@@ -132,7 +127,7 @@ Upload a new PDF to start a fresh conversation.
 RAG_AI_SYSTEM/
 ├── main.py                  # Streamlit UI - entry point
 ├── local_llm.py             # AiModel: loads Gemini, orchestrates RAG, streams output
-├── local_embedding.py       # LocalEmbedding: MiniLM wrapper + index interface
+├── local_embedding.py       # LocalEmbedding: Gemini embedding wrapper + index interface
 ├── vector_index.py          # VectorIndex: pure-stdlib cosine/Euclidean vector store
 ├── pdf_reader.py            # PdfReader: PDF -> clean paragraph list
 ├── pdfs/                    # Drop your PDFs here (gitignored)
@@ -147,9 +142,8 @@ Layer | Library | Role
 ---|---|---
 UI | Streamlit | Chat interface, file upload, live streaming
 LLM | Gemini | Answer generation
-Embeddings | all-MiniLM-L6-v2 | Semantic search vectors
-Inference | Google Gen AI SDK | Model loading and generation
-Compute | PyTorch | GPU-accelerated inference
+Embeddings | Gemini text embedding model | Semantic search vectors
+Inference | Google Gen AI SDK | Embedding and answer generation
 PDF parsing | pypdf | Text extraction
 Vector store | Custom (`vector_index.py`) | In-memory cosine search - no external DB
 
