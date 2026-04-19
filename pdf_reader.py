@@ -55,7 +55,8 @@ class PdfReader:
 
 ### testing ground
 
-pdf_reader = PdfReader()
-pdf_reader.extract_text()
-print(pdf_reader.extract_small_portion_of_the_pdf(0, 100))
-print(pdf_reader.get_paragraphs()[:5])
+if __name__ == "__main__":
+    pdf_reader = PdfReader()
+    pdf_reader.extract_text()
+    print(pdf_reader.extract_small_portion_of_the_pdf(0, 100))
+    print(pdf_reader.get_paragraphs()[:5])
