@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import errors as genai_errors
 from vector_index import VectorIndex 
+from document_store import DocumentStore
 
 
 class LocalEmbedding:
@@ -31,6 +32,18 @@ class LocalEmbedding:
         print("[LocalEmbedding] Gemini embedding client ready.")
 
         self.store = VectorIndex(distance_metric=distance_metric, embedding_fn=self._embed_one,)
+
+        self.doc_store = DocumentStore()
+        self.distance_metric = distance_metric
+        self._load_persisted_index()
+
+    def _load_persisted_index(self) -> None:
+        """Load all persisted vectors and documents from database."""
+        vectors, documents = self.doc_store.load_all_chunks()
+        if vectors:
+            print(f"[LocalEmbedding] Loading {len(vectors)} persisted chunks from {len(set(d.get('doc_id') for d in documents))} documents...")
+            self.store.add_vectors_batch(vectors, documents)
+            print(f"[LocalEmbedding] Loaded {self.store.size()} vectors from persistent storage.")
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -108,17 +121,42 @@ class LocalEmbedding:
             embeddings.append(self._extract_embedding_values(response))
         return embeddings
 
-    def build_index(self, chunks: list[str]) -> None:
+    def build_index(self, chunks: list[str], file_name: str = "document", page_count: int = 0, category: str = "general") -> int:
         """
-        Embed all chunks and store them in the vector index.
+        Embed all chunks and store them in the vector index and persistent storage.
+
+        Does NOT clear existing index - appends to it for multi-document support.
 
         Args:
             chunks: List of text strings to index.
+            file_name: Source PDF filename for tracking.
+            page_count: Number of pages in source PDF.
+            category: Document category/tag.
+
+        Returns:
+            doc_id: The database ID of the indexed document.
         """
+        if not chunks:
+            return -1
+            
         embeddings = self.get_embeddings(chunks)
+        doc_id = self.doc_store.add_document(
+            file_name=file_name,
+            chunks=chunks,
+            vectors=embeddings,
+            page_count=page_count,
+            category=category,
+            embedding_model=self.model_name,
+        )
+
         for chunk, embedding in zip(chunks, embeddings):
-            self.store.add_vector(embedding, {"content": chunk})
-        print(f"[LocalEmbedding] Indexed {len(chunks)} chunks.")
+            self.store.add_vector(embedding, {
+                "content": chunk,
+                "doc_id": doc_id,
+                "file_name": file_name,
+            })
+        print(f"[LocalEmbedding] Indexed {len(chunks)} chunks from '{file_name}' (doc_id={doc_id}).")
+        return doc_id
 
     def search(self, question: str, k: int = 3) -> list[tuple[dict, float]]:
         """
@@ -154,3 +192,30 @@ class LocalEmbedding:
         """
         results = self.search(question, k=k)
         return "\n\n---\n\n".join(doc["content"] for doc, _ in results)
+
+    def clear_index(self) -> None:
+        """Clear all in-memory index (does not delete from persistent storage)."""
+        self.store.clear()
+        print("[LocalEmbedding] In-memory index cleared.")
+
+    def delete_document(self, doc_id: int) -> bool:
+        """Delete a document from persistent storage and reload index."""
+        if self.doc_store.delete_document(doc_id):
+            self.clear_index()
+            self._load_persisted_index()
+            print(f"[LocalEmbedding] Deleted document {doc_id} and reloaded index.")
+            return True
+        return False
+
+    def list_documents(self) -> list[dict]:
+        """List all indexed documents."""
+        return self.doc_store.list_documents()
+
+    def get_index_stats(self) -> dict:
+        """Return statistics about the current index."""
+        docs = self.list_documents()
+        return {
+            "total_vectors": self.store.size(),
+            "total_documents": len(docs),
+            "documents": docs,
+        }

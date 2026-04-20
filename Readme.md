@@ -100,7 +100,7 @@ Get an API key from Google AI Studio. If you are using Vertex AI instead, config
 ### 5 - Run the app
 
 ```bash
-streamlit run main.py
+streamlit run main_v2.py
 ```
 
 Streamlit will print a local URL, usually `http://localhost:8501`. Open it in your browser.
@@ -125,7 +125,8 @@ Upload a new PDF to start a fresh conversation.
 
 ```text
 RAG_AI_SYSTEM/
-├── main.py                  # Streamlit UI - entry point
+├── main.py                  # Compatibility entrypoint (loads main_v2)
+├── main_v2.py               # Streamlit UI - current primary entry point
 ├── local_llm.py             # AiModel: loads Gemini, orchestrates RAG, streams output
 ├── local_embedding.py       # LocalEmbedding: Gemini embedding wrapper + index interface
 ├── vector_index.py          # VectorIndex: pure-stdlib cosine/Euclidean vector store
