@@ -1,11 +1,13 @@
 import os
+from dotenv import load_dotenv
 from google import genai
+from google.genai import errors as genai_errors
 from vector_index import VectorIndex 
 
 
 class LocalEmbedding:
 
-    def __init__(self, model_name: str = "text-embedding-004", distance_metric: str = "cosine"):
+    def __init__(self, model_name: str = "gemini-embedding-001", distance_metric: str = "cosine"):
         """
         Initialise the Gemini embedding client and an empty vector index.
 
@@ -13,10 +15,16 @@ class LocalEmbedding:
             model_name:      Gemini embedding model ID to use.
             distance_metric: Distance metric for the index ('cosine' or 'euclidean').
         """
-        self.model_name = model_name
+        load_dotenv()
+        self.model_name = model_name or os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY is not set in environment variables")
+
+        self._candidate_models = [self.model_name]
+        for fallback_model in ("gemini-embedding-001", "text-embedding-004"):
+            if fallback_model not in self._candidate_models:
+                self._candidate_models.append(fallback_model)
 
         print(f"[LocalEmbedding] Initialising Gemini embedding model {self.model_name}...")
         self.client = genai.Client(api_key=api_key)
@@ -52,8 +60,30 @@ class LocalEmbedding:
         Returns:
             List of floats representing the text embedding.
         """
-        response = self.client.models.embed_content(model=self.model_name, contents=text)
+        response = self._embed_content_with_fallback(text)
         return self._extract_embedding_values(response)
+
+    def _embed_content_with_fallback(self, text: str):
+        """Try configured embedding model(s), switching automatically on 404 model errors."""
+        last_error = None
+
+        for candidate_model in self._candidate_models:
+            try:
+                response = self.client.models.embed_content(model=candidate_model, contents=text)
+                if candidate_model != self.model_name:
+                    print(f"[LocalEmbedding] Switching embedding model to {candidate_model}.")
+                    self.model_name = candidate_model
+                return response
+            except genai_errors.ClientError as error:
+                last_error = error
+                if getattr(error, "status_code", None) == 404:
+                    continue
+                raise
+
+        raise RuntimeError(
+            "No supported embedding model was found for this API key/version. "
+            "Set GEMINI_EMBEDDING_MODEL in your .env to a model returned by ListModels."
+        ) from last_error
 
     # ------------------------------------------------------------------
     # Public API
@@ -74,7 +104,7 @@ class LocalEmbedding:
 
         embeddings: list[list[float]] = []
         for text in texts:
-            response = self.client.models.embed_content(model=self.model_name, contents=text)
+            response = self._embed_content_with_fallback(text)
             embeddings.append(self._extract_embedding_values(response))
         return embeddings
 
