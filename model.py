@@ -261,10 +261,20 @@ class AiModel:
             stream = self._generate_content_stream_with_fallback(full_prompt)
 
             for chunk in stream:
-                text = getattr(chunk, "text", "")
+                text = chunk if isinstance(chunk, str) else getattr(chunk, "text", "")
                 if text:
                     yield text
-        except RuntimeError as error:
+        except Exception as error:
+            if self._is_retryable_model_error(error):
+                try:
+                    fallback_text = self._generate_content_with_fallback(full_prompt)
+                    if fallback_text:
+                        yield fallback_text
+                    return
+                except Exception as fallback_error:
+                    yield f"Error: {str(fallback_error)}"
+                    return
+
             yield f"Error: {str(error)}"
 
     def full_prompt_for_rag(

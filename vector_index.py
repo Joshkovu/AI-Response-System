@@ -39,6 +39,23 @@ class VectorIndex:
         self.vectors.append(vector)
         self.documents.append(document)
 
+    def add_vectors_batch(self, vectors: list[list[float]], documents: list[dict]) -> None:
+        """Add multiple vectors and their documents in batch."""
+        if len(vectors) != len(documents):
+            raise ValueError("vectors and documents must have the same length")
+        
+        for vector, document in zip(vectors, documents):
+            self.add_vector(vector, document)
+
+    def clear(self) -> None:
+        """Clear all vectors and documents."""
+        self.vectors.clear()
+        self.documents.clear()
+
+    def size(self) -> int:
+        """Return number of indexed vectors."""
+        return len(self.vectors)
+
     def search(self, query: str, k: int = 3) -> list[tuple[dict, float]]:
         """
         Search top-k closest documents to a query string.
